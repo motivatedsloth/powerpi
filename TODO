@@ -2,15 +2,21 @@ Classes:
 
 PZEM: # represents a sensor
 	port = ttyUSB0
-	type = 'solar'|'main' 
+	read() returns reading
+???
+	onread(callback) ## callback is passed current PZEM instance
+
+reading:
 	power = 123 # float current power reading from sensor
 	voltage = 122 
+	... all other from pzem
 	
-	onread(callback) ## callback is passed current PZEM instance
-	read()
+panel:
+	main power # see circuit
+	solar power # see circuit
 
-
-Circuit:
+circuit:
+	type = 'solar'|'main' 
 	solar = 123 # current watts positive when generating, negative when pulling
 	main = 122 # current watts, positive whel pulling from grid, negative when pushing to grid
 
