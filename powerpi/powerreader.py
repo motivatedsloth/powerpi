@@ -10,6 +10,8 @@ from modbus_tk import modbus_rtu
 
 import paho.mqtt.client as mqtt
 
+import os
+
 # port configuration adjust as needed
 ports = {
         'main1': '/dev/ttyUSB0',
@@ -19,10 +21,10 @@ ports = {
         }
 
 # mqtt config
-broker = '192.168.0.92'
-user = 'energy'
-pw = 'Tigger23'
-topic = 'energy/testing'
+broker = os.environ.get('MQTT_BROKER')
+user = os.environ.get('MQTT_USER')
+pw = os.environ.get('MQTT_PASS')
+topic = os.environ.get('MQTT_TOPIC')
 
 
 class PZEMReadError(Exception):
@@ -120,5 +122,6 @@ def reader():
         res = {'hello': 'al', 'hi': 'laura'}
         pub.publish(topic, json.dumps(res))
         time.sleep(5)
+
 
 reader()
