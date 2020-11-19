@@ -1,0 +1,19 @@
+[tool.poetry]
+name = "powerpi"
+version = "0.1.0"
+description = ""
+authors = ["Alan Buss <al@constellationwebservices.com>"]
+
+[tool.poetry.dependencies]
+python = "^3.8"
+pyeventdispatcher = "^0.2.3-alpha.0"
+paho-mqtt = "^1.5.1"
+modbus_tk = "^1.1.2"
+pyserial = "^3.4"
+
+[tool.poetry.dev-dependencies]
+pytest = "^5.2"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
