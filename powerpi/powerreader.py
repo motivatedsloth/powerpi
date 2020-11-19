@@ -120,3 +120,5 @@ def reader():
         res = {'hello': 'al', 'hi': 'laura'}
         pub.publish(topic, json.dumps(res))
         time.sleep(5)
+
+reader()
