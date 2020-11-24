@@ -104,46 +104,26 @@ pub = publisher(broker, user, pw)
 
 class branch():
     def __init__(self, limit):
-        self.myGen = wattage(limit)
-        self.myNet = wattage(limit)
-        self.myLoad = load(limit) 
+        self.limit = limit
+        self.load = load()
+        self.values = {'generation': None, 'net': None, 'load': None} # reported values
+        self.current = {'generation': None, 'net': None, 'load': None} # current values
 
     def evaluate(self, main, generation):
         '''check load and wattages, return true if any changes'''
-        load = self.myLoad.evaluate(main, generation)
-        gen = self.myGen.add(generation)
-        if load or gen:
-            self.myNet.add(self.myLoad.getValue() - self.myGen.getValue()) # net is positive when pulling from grid, negative if pushing
-            return True
+        self.current["load"] = self.load.evaluate(main, generation)
+        self.current["net"] = self.current["load"] - generation # net is positive when pulling from grid, negative if pushing
+        self.current["generation"] = generation
+        for key in self.values:
+            if self.values[key] == None or abs(self.values[key] - self.current[key]) >= self.limit:
+                return True
         return False
 
     def report(self):
-        return {
-                "net": self.myNet.getValue(),
-                "load": self.myLoad.getValue(),
-                "generation": self.myGen.getValue()
-                }
-
-class wattage():
-    '''class to track wattages read'''
-
-    def __init__(self, limit=10):
-        '''limit is wattage difference that triggers a change'''
-        self.limit = limit
-        self.val = None # last reported value
-
-    def add(self, watts):
-        '''return true if value changed'''
-        if self.val == None or abs(watts - self.val) >= self.limit:
-            self.setValue(watts)
-            return True
-        return False
-
-    def setValue(self, value):
-        self.val = value
-
-    def getValue(self):
-        return self.val
+        self.values['net'] = self.current["net"]
+        self.values['load'] = self.current["load"]
+        self.values['generation'] = self.current["generation"]
+        return self.values
 
 
 class load_evaluator():
@@ -169,9 +149,8 @@ class load_evaluator():
         return self.history[-1]
 
 
-class load(wattage):
-    def __init__(self, limit):
-        wattage.__init__(self, limit)
+class load():
+    def __init__(self):
         self.over = load_evaluator() # load is greater than generation
         self.under = load_evaluator() # load is less than generation
 
@@ -179,15 +158,12 @@ class load(wattage):
         isOver = self.over.add(generation + net) # sum when load is greater than generation
         isUnder = self.under.add(generation - net) # difference when load is under than generation
         if not isUnder: # low generation, can only be over
-            return self.add(self.over.getValue())
+            return self.over.getValue()
         
-        if self.val == None: # no definite choice, just use default
-            return self.add(phantom_load)
-        
-        if self.over.getDeviation() > self.under.getDeviation():
-            return self.add(self.under.getValue())
+        if self.over.getDeviation() >= self.under.getDeviation():
+            return self.under.getValue()
         else: 
-            return self.add(self.over.getValue())
+            return self.over.getValue()
 
 
 class normalizer():
