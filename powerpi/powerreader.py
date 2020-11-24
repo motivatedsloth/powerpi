@@ -27,6 +27,10 @@ user = os.environ.get('MQTT_USER')
 pw = os.environ.get('MQTT_PASS')
 topic = os.environ.get('MQTT_TOPIC')
 
+# general config
+report_threshold = 5 # only report if wattage change is greater than 
+phantom_load = 45 # typical phantom load 
+
 
 class PZEMReadError(Exception):
     pass
@@ -99,17 +103,14 @@ for sensor, port in ports.items():
 pub = publisher(broker, user, pw)
 
 class branch():
-    def __init__(self):
-        self.myGen = wattage()
-        self.myNet = wattage()
-        self.myLoad = load() 
+    def __init__(self, limit):
+        self.myGen = wattage(limit)
+        self.myNet = wattage(limit)
+        self.myLoad = load(limit) 
 
     def evaluate(self, main, generation):
         '''check load and wattages, return true if any changes'''
         load = self.myLoad.evaluate(main, generation)
-        if not self.myLoad.ready:
-            return False
-
         gen = self.myGen.add(generation)
         if load or gen:
             self.myNet.add(self.myLoad.getValue() - self.myGen.getValue()) # net is positive when pulling from grid, negative if pushing
@@ -145,14 +146,11 @@ class wattage():
         return self.val
 
 
-class load_evaluator(wattage):
+class load_evaluator():
     '''class for evaluating load by deviation'''
 
-    def __init__(self, limit=10, quantity=3):
-        wattage.__init__(self, limit)
+    def __init__(self, quantity=3):
         self.history = list()
-        self.quantity = 3 # number of values to store in history for standard deviation
-        self.limit = limit
         self.quantity = quantity
 
     def add(self, watts):
@@ -160,55 +158,43 @@ class load_evaluator(wattage):
         if len(self.history) > self.quantity:
             self.history.pop(0)
         self.mean = sum(self.history)/len(self.history)
-        self.deviation()
-        if watts < 0 or len(self.history) < self.quantity:
-            return False
-        over_limit = wattage.add(self, watts)
-        return self.val != None and self.dev < 1
-
-    def mean(self):
-        return self.mean
-
-    def variance(self):
-        return sum((c - self.mean) **2 for c in self.history)/len(self.history)
-
-    def deviation(self):
-        self.dev = math.sqrt(self.variance())
-        return self.dev
+        self.variance = sum((c - self.mean) **2 for c in self.history)/len(self.history)
+        self.dev = math.sqrt(self.variance)
+        return watts > 0
 
     def getDeviation(self):
         return self.dev
 
-    def current(self):
+    def getValue(self):
         return self.history[-1]
 
 
 class load(wattage):
-    def __init__(self):
-        wattage.__init__(self)
+    def __init__(self, limit):
+        wattage.__init__(self, limit)
         self.over = load_evaluator() # load is greater than generation
         self.under = load_evaluator() # load is less than generation
-        self.ready = False
 
     def evaluate(self, net, generation):
         isOver = self.over.add(generation + net) # sum when load is greater than generation
         isUnder = self.under.add(generation - net) # difference when load is under than generation
-        if isOver or isUnder:
-            self.ready = True
-            if self.over.getDeviation() > self.under.getDeviation():
-                if isUnder:
-                    return self.add(self.under.getValue())
-            else: 
-                if isOver:
-                    return self.add(self.over.getValue())
-        return False
+        if not isUnder: # low generation, can only be over
+            return self.add(self.over.getValue())
+        
+        if self.val == None: # no definite choice, just use default
+            return self.add(phantom_load)
+        
+        if self.over.getDeviation() > self.under.getDeviation():
+            return self.add(self.under.getValue())
+        else: 
+            return self.add(self.over.getValue())
 
 
 class normalizer():
     '''normalize readings to net, load, generation'''
     def __init__(self):
-        self.branch1 = branch() 
-        self.branch2 = branch() 
+        self.branch1 = branch(report_threshold) 
+        self.branch2 = branch(report_threshold) 
 
     def normalize(self, readings):
         b1 = self.branch1.evaluate(
